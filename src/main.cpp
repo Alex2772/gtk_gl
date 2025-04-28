@@ -4,7 +4,9 @@
 #include <stdio.h>
 
 static GtkWidget* gl_area = NULL;
-
+static int g_width = 0;
+static int g_height = 0;
+static int loc_size = 0;
 
 static void close_window(GtkWidget* widget) {
     /* Reset the state */
@@ -100,15 +102,23 @@ static void init_shaders(GLuint* program_out) {
     }
 
     fragment = create_shader(GL_FRAGMENT_SHADER,
-                             "#version 300 es                                       \n"
-                             "precision mediump float;                              \n"
-                             "layout(location = 0) out vec4 outColor;               \n"
-                             "uniform sampler2D s_texture;                          \n"
-                             "void main()                                           \n"
-                             "{                                                     \n"
-                             "  float v = mod(gl_FragCoord.x + gl_FragCoord.y, 2.0);\n"
-                             "  outColor = vec4(v, v, v, 1.0);                      \n"
-                             "}                                                     \n");
+                             "#version 300 es                                        \n"
+                             "precision mediump float;                               \n"
+                             "layout(location = 0) out vec4 outColor;                \n"
+                             "uniform sampler2D s_texture;                           \n"
+                             "uniform vec2 size;                                     \n"
+                             "void main()                                            \n"
+                             "{                                                      \n"
+                             "  if (gl_FragCoord.x <= 1.0 ||                         \n"
+                             "      gl_FragCoord.y <= 1.0 ||                         \n"
+                             "      gl_FragCoord.x >= size.x ||                      \n"
+                             "      gl_FragCoord.y >= size.y) {                      \n"
+                             "    outColor = vec4(1.0, 0.0, 0.0, 1.0);               \n"
+                             "    return;                                            \n"
+                             "  }                                                    \n"
+                             "  float v = mod(gl_FragCoord.x + gl_FragCoord.y, 2.0); \n"
+                             "  outColor = vec4(v, v, v, 1.0);                       \n"
+                             "}                                                      \n");
 
     if (fragment == 0) {
         glDeleteShader(vertex);
@@ -143,6 +153,9 @@ static void init_shaders(GLuint* program_out) {
     }
 
     /* Get the location of the "mvp" uniform */
+    loc_size = glGetUniformLocation(program, "size");
+
+
     glDetachShader(program, vertex);
     glDetachShader(program, fragment);
 
@@ -186,13 +199,15 @@ static void draw_object(void) {
     /* Use our shaders */
     glUseProgram(program);
 
+    glUniform2f(loc_size, float(g_width) - 1, float(g_height) - 1);
+
     /* Use the vertices in our buffer */
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, position_buffer);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void*) 0);
 
 
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 6);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
     /* We finished using the buffers and program */
     glDisableVertexAttribArray(0);
@@ -200,6 +215,12 @@ static void draw_object(void) {
     glUseProgram(0);
 }
 
+
+static gboolean resize(GtkGLArea* area, int width, int height) {
+    g_width = width;
+    g_height = height;
+    return TRUE;
+}
 
 static gboolean render(GtkGLArea* area, GdkGLContext* context) {
     if (gtk_gl_area_get_error(area) != NULL)
@@ -257,6 +278,7 @@ static void activate(GtkApplication* app, gpointer user_data) {
 
     // The main "draw" call for GtkGLArea
     g_signal_connect(gl_area, "render", G_CALLBACK(render), NULL);
+    g_signal_connect(gl_area, "resize", G_CALLBACK(resize), NULL);
 
 //    gtk_application_set_menubar(GTK_APPLICATION(app), G_MENU_MODEL(menu_bar));
 //    gtk_application_window_set_show_menubar(GTK_APPLICATION_WINDOW(window), TRUE);
